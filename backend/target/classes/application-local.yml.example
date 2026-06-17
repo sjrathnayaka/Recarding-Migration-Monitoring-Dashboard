@@ -15,6 +15,7 @@ spring:
       # Set to 'always' to run schema.sql and data.sql automatically on startup
       # in your local/test schema.
       mode: always
+      continue-on-error: true
 
 logging:
   level:

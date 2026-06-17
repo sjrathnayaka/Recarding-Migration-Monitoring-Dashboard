@@ -32,10 +32,8 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/login", "/api/logout").permitAll()
-                // Role-based protection: Engine endpoints require ADMIN role.
-                // Rest of the endpoints (under /api/dashboard) require either ADMIN or OPERATOR.
-                .requestMatchers("/api/dashboard/engine-status", "/api/dashboard/engine-history").hasRole("ADMIN")
-                .requestMatchers("/api/dashboard/**").hasAnyRole("ADMIN", "OPERATOR")
+                .requestMatchers("/api/health").permitAll()
+                .requestMatchers("/api/dashboard/**").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form

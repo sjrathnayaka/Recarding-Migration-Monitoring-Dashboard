@@ -2,6 +2,14 @@
 -- SCHEMA CREATION SCRIPT FOR RECARDING MONITORING DASHBOARD
 -- ==========================================
 
+/*
+-- UNCOMMENT TO RESET THE SCHEMA (DROP TABLES)
+DROP TABLE MD_ENGINE_EXECUTION_LOG;
+DROP TABLE MD_ENGINE_CONFIGURATIONS;
+-- DROP TABLE RECARDREQUEST;
+-- DROP TABLE CARD;
+*/
+
 -- NOTE: The CARD and RECARDREQUEST tables are assumed to exist in the production environment.
 -- For local/test environments, you can uncomment the definitions below to create them.
 

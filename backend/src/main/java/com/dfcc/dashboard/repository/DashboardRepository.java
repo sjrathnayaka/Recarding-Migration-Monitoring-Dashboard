@@ -22,12 +22,12 @@ public class DashboardRepository {
      * Fetch card counts grouped by migration flag (MGRFLAG).
      */
     public MigrationFlagsDto getMigrationFlags(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
-        StringBuilder sql = new StringBuilder(
-            "SELECT c.MGRFLAG, COUNT(*) AS cnt " +
-            "FROM CARD c " +
-            "LEFT JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
-            "WHERE 1=1 "
-        );
+        boolean joinReason = reason != null && !reason.trim().isEmpty();
+        StringBuilder sql = new StringBuilder("SELECT c.MGRFLAG, COUNT(*) AS cnt FROM CARD c ");
+        if (joinReason) {
+            sql.append("LEFT JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER ");
+        }
+        sql.append("WHERE 1=1 ");
         MapSqlParameterSource params = new MapSqlParameterSource();
 
         if (fromDate != null) {
@@ -42,7 +42,7 @@ public class DashboardRepository {
             sql.append("AND c.CARDPRODUCT = :productType ");
             params.addValue("productType", productType);
         }
-        if (reason != null && !reason.trim().isEmpty()) {
+        if (joinReason) {
             sql.append("AND rr.REASON = :reason ");
             params.addValue("reason", reason);
         }
