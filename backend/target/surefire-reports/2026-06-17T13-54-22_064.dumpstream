@@ -1,5 +1,0 @@
-# Created at 2026-06-17T13:54:23.125
-Boot Manifest-JAR contains absolute paths in classpath 'D:\DFCC-sathya\dashboard\backend\target\test-classes'
-Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
-'other' has different root
-
