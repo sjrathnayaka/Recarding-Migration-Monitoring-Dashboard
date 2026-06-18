@@ -74,22 +74,6 @@ public class DashboardController {
     }
 
     /**
-     * GET /api/dashboard/engine-history
-     * Access restricted to ADMIN only.
-     */
-    @GetMapping("/engine-history")
-    @PreAuthorize("hasRole('ADMIN')")
-    public EngineHistoryResponse getEngineHistory(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
-            @RequestParam(defaultValue = "startTime") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir) {
-        return dashboardRepository.getEngineHistory(page, size, fromDate, toDate, sortBy, sortDir);
-    }
-
-    /**
      * GET /api/dashboard/product-types
      */
     @GetMapping("/product-types")
