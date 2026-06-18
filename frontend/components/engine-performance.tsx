@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Clock, Play, Pause } from 'lucide-react';
+import { Activity, Clock, Play, Cpu, Timer, Layers } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface PerformanceMetric {
@@ -24,32 +24,32 @@ export default function EnginePerformance() {
     {
       label: 'Engine Status',
       value: 'Running',
-      icon: <Activity size={20} className="text-green-600" />,
+      icon: <Activity size={22} />,
     },
     {
       label: 'Last Execution Timestamp',
       value: '2024-06-18 13:45:32',
-      icon: <Clock size={20} className="text-blue-600" />,
+      icon: <Clock size={22} />,
     },
     {
       label: 'Next Scheduled Run',
       value: '2024-06-18 14:00:00',
-      icon: <Play size={20} className="text-amber-600" />,
+      icon: <Play size={22} />,
     },
     {
       label: 'Cards Processed per Run',
       value: '2,847',
-      icon: null,
+      icon: <Layers size={22} />,
     },
     {
       label: 'Average Processing Time',
       value: '1.38 sec/card',
-      icon: null,
+      icon: <Timer size={22} />,
     },
     {
       label: 'Parallel Threads',
       value: '8 threads',
-      icon: null,
+      icon: <Cpu size={22} />,
     },
   ];
 
@@ -60,27 +60,23 @@ export default function EnginePerformance() {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {metrics.map((metric) => (
-          <div
-            key={metric.label}
-            className="bg-card border border-border rounded-lg p-6 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <p className="text-sm text-muted-foreground font-medium">{metric.label}</p>
-              {metric.icon && metric.label === 'Engine Status' && (
-                <div className="flex items-center gap-1">
-                  {metric.icon}
-                  <span className="inline-block w-2 h-2 bg-green-600 rounded-full animate-pulse"></span>
-                </div>
-              )}
-              {metric.icon && metric.label !== 'Engine Status' && metric.icon}
+          <div key={metric.label} className="kpi-card">
+            {metric.icon && <div className="kpi-card-icon">{metric.icon}</div>}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted-foreground font-medium">{metric.label}</p>
+                {metric.label === 'Engine Status' && (
+                  <span className="inline-block w-2 h-2 bg-accent rounded-full animate-pulse" />
+                )}
+              </div>
+              <p className="text-2xl font-bold text-primary">{metric.value}</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">{metric.value}</p>
           </div>
         ))}
       </div>
 
       {/* Performance Chart */}
-      <div className="bg-card border border-border rounded-lg p-6">
+      <div className="dashboard-card p-6">
         <h3 className="text-lg font-semibold text-foreground mb-6">Performance Metrics Timeline</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
@@ -99,7 +95,7 @@ export default function EnginePerformance() {
               <Line
                 type="monotone"
                 dataKey="processedCards"
-                stroke="var(--primary)"
+                stroke="var(--chart-1)"
                 strokeWidth={2}
                 name="Cards Processed"
                 dot={false}
@@ -120,7 +116,7 @@ export default function EnginePerformance() {
 
       {/* Time Period Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-card border border-border rounded-lg p-6">
+        <div className="dashboard-card p-6">
           <p className="text-sm text-muted-foreground font-medium mb-3">Monitoring Period</p>
           <p className="text-2xl font-bold text-foreground mb-4">Today (Last 24 hours)</p>
           <div className="space-y-2 text-sm text-muted-foreground">
@@ -129,25 +125,25 @@ export default function EnginePerformance() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-6">
+        <div className="dashboard-card p-6">
           <p className="text-sm text-muted-foreground font-medium mb-3">System Status</p>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">CPU Usage</span>
               <div className="w-24 bg-muted rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full w-1/2"></div>
+                <div className="bg-chart-1 h-2 rounded-full w-1/2"></div>
               </div>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Memory Usage</span>
               <div className="w-24 bg-muted rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full w-2/3"></div>
+                <div className="bg-chart-1 h-2 rounded-full w-2/3"></div>
               </div>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Queue Depth</span>
               <div className="w-24 bg-muted rounded-full h-2">
-                <div className="bg-amber-600 h-2 rounded-full w-1/3"></div>
+                <div className="bg-chart-2 h-2 rounded-full w-1/3"></div>
               </div>
             </div>
           </div>
