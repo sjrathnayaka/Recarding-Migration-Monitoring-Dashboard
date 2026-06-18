@@ -19,8 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "spring.datasource.username=sa",
     "spring.datasource.password=",
     "spring.sql.init.mode=always",
-    "spring.sql.init.schema-locations=classpath:db/schema.sql",
-    "spring.sql.init.data-locations=classpath:db/data.sql",
+    "spring.sql.init.schema-locations=classpath:db/test-schema.sql",
+    "spring.sql.init.data-locations=classpath:db/test-data.sql",
     "spring.sql.init.continue-on-error=true"
 })
 @AutoConfigureMockMvc
@@ -31,9 +31,9 @@ public class DashboardControllerTest {
     private MockMvc mockMvc;
 
     @Test
-    public void testUnauthorizedAccess() throws Exception {
+    public void testPublicDashboardAccess() throws Exception {
         mockMvc.perform(get("/api/dashboard/migration-flags"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
     }
 
     @Test

@@ -1,33 +1,58 @@
-import axios from 'axios';
+import axios from 'axios'
 
-const BASE = '/api/dashboard';
+const api = axios.create({
+  baseURL: '/api',
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+})
 
-const buildParams = (filters = {}) => {
-  const p = {};
-  if (filters.fromDate) p.fromDate = filters.fromDate;
-  if (filters.toDate) p.toDate = filters.toDate;
-  if (filters.productType) p.productType = filters.productType;
-  if (filters.reason) p.reason = filters.reason;
-  if (filters.mgrFlag !== undefined && filters.mgrFlag !== '') p.mgrFlag = filters.mgrFlag;
-  return p;
-};
+export async function login(username, password) {
+  const body = new URLSearchParams({ username, password })
+  const { data } = await api.post('/login', body)
+  return data
+}
 
-export const fetchMigrationFlags = (filters) =>
-  axios.get(`${BASE}/migration-flags`, { params: buildParams(filters) }).then(r => r.data);
+export async function logout() {
+  const { data } = await api.post('/logout')
+  return data
+}
 
-export const fetchRequestSummary = (filters) =>
-  axios.get(`${BASE}/request-summary`, { params: buildParams(filters) }).then(r => r.data);
+export async function getMe() {
+  const { data } = await api.get('/dashboard/me')
+  return data
+}
 
-export const fetchFailedRequests = (filters) =>
-  axios.get(`${BASE}/failed-requests`, { params: buildParams(filters) }).then(r => r.data);
+export async function getMigrationFlags(params = {}) {
+  const { data } = await api.get('/dashboard/migration-flags', { params })
+  return data
+}
 
-export const fetchEngineStatus = () =>
-  axios.get(`${BASE}/engine-status`).then(r => r.data);
+export async function getRequestSummary(params = {}) {
+  const { data } = await api.get('/dashboard/request-summary', { params })
+  return data
+}
 
-export const fetchEngineHistory = (page = 0, size = 10, fromDate, toDate, sortBy = 'startTime', sortDir = 'desc') =>
-  axios.get(`${BASE}/engine-history`, {
-    params: { page, size, fromDate, toDate, sortBy, sortDir },
-  }).then(r => r.data);
+export async function getFailedRequests(params = {}) {
+  const { data } = await api.get('/dashboard/failed-requests', { params })
+  return data
+}
 
-export const fetchProductTypes = () =>
-  axios.get(`${BASE}/product-types`).then(r => r.data);
+export async function getEngineStatus() {
+  const { data } = await api.get('/dashboard/engine-status')
+  return data
+}
+
+export async function getEngineHistory(params = {}) {
+  const { data } = await api.get('/dashboard/engine-history', { params })
+  return data
+}
+
+export async function getProductTypes() {
+  const { data } = await api.get('/dashboard/product-types')
+  return data
+}
+
+export async function getHealth() {
+  const { data } = await axios.get('/api/health')
+  return data
+}

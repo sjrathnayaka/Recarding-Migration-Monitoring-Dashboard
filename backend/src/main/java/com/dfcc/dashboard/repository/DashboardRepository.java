@@ -1,6 +1,7 @@
 package com.dfcc.dashboard.repository;
 
 import com.dfcc.dashboard.dto.*;
+import com.dfcc.dashboard.util.RecardReasonMapper;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -43,8 +44,7 @@ public class DashboardRepository {
             params.addValue("productType", productType);
         }
         if (joinReason) {
-            sql.append("AND rr.REASON = :reason ");
-            params.addValue("reason", reason);
+            appendReasonCodeFilter(sql, params, reason);
         }
         if (mgrFlag != null) {
             sql.append("AND c.MGRFLAG = :mgrFlag ");
@@ -73,7 +73,7 @@ public class DashboardRepository {
      */
     public RequestSummaryDto getRequestSummary(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
         StringBuilder sql = new StringBuilder(
-            "SELECT c.MGRFLAG, rr.REASON, COUNT(*) AS cnt " +
+            "SELECT c.MGRFLAG, rr.REQUESTREASONCODE, COUNT(*) AS cnt " +
             "FROM CARD c " +
             "JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
             "WHERE 1=1 "
@@ -93,15 +93,14 @@ public class DashboardRepository {
             params.addValue("productType", productType);
         }
         if (reason != null && !reason.trim().isEmpty()) {
-            sql.append("AND rr.REASON = :reason ");
-            params.addValue("reason", reason);
+            appendReasonCodeFilter(sql, params, reason);
         }
         if (mgrFlag != null) {
             sql.append("AND c.MGRFLAG = :mgrFlag ");
             params.addValue("mgrFlag", mgrFlag);
         }
 
-        sql.append("GROUP BY c.MGRFLAG, rr.REASON");
+        sql.append("GROUP BY c.MGRFLAG, rr.REQUESTREASONCODE");
 
         RequestSummaryDto.ReasonBreakdown pending = new RequestSummaryDto.ReasonBreakdown();
         RequestSummaryDto.ReasonBreakdown processed = new RequestSummaryDto.ReasonBreakdown();
@@ -110,11 +109,11 @@ public class DashboardRepository {
 
         namedParameterJdbcTemplate.query(sql.toString(), params, rs -> {
             int flag = rs.getInt("MGRFLAG");
-            String rsn = rs.getString("REASON");
+            String reasonCode = rs.getString("REQUESTREASONCODE");
             long cnt = rs.getLong("cnt");
 
-            boolean isReplacement = rsn != null && rsn.equalsIgnoreCase("Card Replacement");
-            boolean isProductChange = rsn != null && rsn.equalsIgnoreCase("Product Change");
+            boolean isReplacement = RecardReasonMapper.isReplacementCode(reasonCode);
+            boolean isProductChange = RecardReasonMapper.isProductChangeCode(reasonCode);
 
             if (flag == 2) {
                 if (isReplacement) pending.setReplacement(pending.getReplacement() + cnt);
@@ -147,7 +146,7 @@ public class DashboardRepository {
      */
     public List<FailedRequestDto> getFailedRequests(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
         StringBuilder sql = new StringBuilder(
-            "SELECT rr.REQUESTID, rr.REQUESTEDCARD, rr.REASON, rr.REJECTREMARK, rr.LASTUPDATEDTIME " +
+            "SELECT rr.REQUESTID, rr.REQUESTEDCARD, rr.REQUESTREASONCODE, rr.REJECTREMARK, rr.LASTUPDATEDTIME " +
             "FROM CARD c " +
             "JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
             "WHERE c.MGRFLAG = 4 "
@@ -167,8 +166,7 @@ public class DashboardRepository {
             params.addValue("productType", productType);
         }
         if (reason != null && !reason.trim().isEmpty()) {
-            sql.append("AND rr.REASON = :reason ");
-            params.addValue("reason", reason);
+            appendReasonCodeFilter(sql, params, reason);
         }
         if (mgrFlag != null && mgrFlag != 4) {
             // If mgrFlag filter is passed and is not 4, then no failed requests can match.
@@ -183,7 +181,7 @@ public class DashboardRepository {
             return FailedRequestDto.builder()
                     .requestId(rs.getString("REQUESTID"))
                     .cardNumber(rs.getString("REQUESTEDCARD"))
-                    .reason(rs.getString("REASON"))
+                    .reason(RecardReasonMapper.toDisplayLabel(rs.getString("REQUESTREASONCODE")))
                     .rejectRemark(rs.getString("REJECTREMARK"))
                     .lastUpdatedTime(lastUpdated)
                     .build();
@@ -328,5 +326,15 @@ public class DashboardRepository {
     public List<String> getProductTypes() {
         String sql = "SELECT DISTINCT CARDPRODUCT FROM CARD WHERE CARDPRODUCT IS NOT NULL ORDER BY CARDPRODUCT";
         return namedParameterJdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("CARDPRODUCT"));
+    }
+
+    private void appendReasonCodeFilter(StringBuilder sql, MapSqlParameterSource params, String reason) {
+        List<String> codes = RecardReasonMapper.codesForApiReason(reason);
+        if (codes.isEmpty()) {
+            sql.append("AND 1=0 ");
+            return;
+        }
+        sql.append("AND rr.REQUESTREASONCODE IN (:reasonCodes) ");
+        params.addValue("reasonCodes", codes);
     }
 }
