@@ -15,13 +15,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "spring.datasource.driver-class-name=org.h2.Driver",
     "spring.datasource.username=sa",
     "spring.datasource.password=",
-    "spring.sql.init.mode=always",
-    "spring.sql.init.schema-locations=classpath:db/schema.sql",
-    "spring.sql.init.data-locations=classpath:db/data.sql",
-    "spring.sql.init.continue-on-error=true"
+    "spring.sql.init.mode=never"
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.springframework.test.context.jdbc.Sql(scripts = {
+    "/db/test-schema.sql",
+    "/db/test-data.sql"
+})
 public class DashboardControllerTest {
 
     @Autowired

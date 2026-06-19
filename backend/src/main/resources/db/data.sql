@@ -2,6 +2,8 @@
 -- SEED DATA SCRIPT FOR RECARDING MONITORING DASHBOARD
 -- ==========================================
 
+DELETE FROM MD_ENGINE_CONFIGURATIONS;
+
 -- NOTE: Uncomment the CARD and RECARDREQUEST sections below if you are running in a local test schema.
 
 /*

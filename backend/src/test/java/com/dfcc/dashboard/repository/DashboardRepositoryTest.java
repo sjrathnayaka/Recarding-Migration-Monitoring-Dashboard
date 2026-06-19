@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Sql(scripts = {
     "/db/test-schema.sql",   // Creates H2 tables
     "/db/test-data.sql"      // Seeds read-only sample data into H2
-}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 public class DashboardRepositoryTest {
 
     @Autowired

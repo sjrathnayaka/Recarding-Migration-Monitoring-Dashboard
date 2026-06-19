@@ -31,9 +31,3 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
-
-logging:
-  level:
-    org.springframework.security: INFO
-    org.springframework.jdbc: DEBUG
-    com.dfcc.dashboard: DEBUG

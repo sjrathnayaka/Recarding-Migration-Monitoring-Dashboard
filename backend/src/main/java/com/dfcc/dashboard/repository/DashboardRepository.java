@@ -18,6 +18,13 @@ public class DashboardRepository {
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
     }
 
+    public List<String> getTableColumns() {
+        return namedParameterJdbcTemplate.getJdbcOperations().queryForList(
+            "SELECT column_name FROM user_tab_columns WHERE table_name = 'RECARDREQUEST' ORDER BY column_id", 
+            String.class
+        );
+    }
+
     /**
      * Fetch card counts grouped by migration flag (MGRFLAG).
      */
@@ -43,7 +50,7 @@ public class DashboardRepository {
             params.addValue("productType", productType);
         }
         if (joinReason) {
-            sql.append("AND rr.REASON = :reason ");
+            sql.append("AND rr.REQUESTREASONCODE = :reason ");
             params.addValue("reason", reason);
         }
         if (mgrFlag != null) {
@@ -58,11 +65,11 @@ public class DashboardRepository {
             int flag = rs.getInt("MGRFLAG");
             long cnt = rs.getLong("cnt");
             switch (flag) {
-                case 0 -> dto.setFlag0(cnt);
-                case 1 -> dto.setFlag1(cnt);
-                case 2 -> dto.setFlag2(cnt);
-                case 3 -> dto.setFlag3(cnt);
-                case 4 -> dto.setFlag4(cnt);
+                case 0: dto.setFlag0(cnt); break;
+                case 1: dto.setFlag1(cnt); break;
+                case 2: dto.setFlag2(cnt); break;
+                case 3: dto.setFlag3(cnt); break;
+                case 4: dto.setFlag4(cnt); break;
             }
         });
         return dto;
@@ -73,7 +80,7 @@ public class DashboardRepository {
      */
     public RequestSummaryDto getRequestSummary(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
         StringBuilder sql = new StringBuilder(
-            "SELECT c.MGRFLAG, rr.REASON, COUNT(*) AS cnt " +
+            "SELECT c.MGRFLAG, rr.REQUESTREASONCODE, COUNT(*) AS cnt " +
             "FROM CARD c " +
             "JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
             "WHERE 1=1 "
@@ -93,7 +100,7 @@ public class DashboardRepository {
             params.addValue("productType", productType);
         }
         if (reason != null && !reason.trim().isEmpty()) {
-            sql.append("AND rr.REASON = :reason ");
+            sql.append("AND rr.REQUESTREASONCODE = :reason ");
             params.addValue("reason", reason);
         }
         if (mgrFlag != null) {
@@ -101,7 +108,7 @@ public class DashboardRepository {
             params.addValue("mgrFlag", mgrFlag);
         }
 
-        sql.append("GROUP BY c.MGRFLAG, rr.REASON");
+        sql.append("GROUP BY c.MGRFLAG, rr.REQUESTREASONCODE");
 
         RequestSummaryDto.ReasonBreakdown pending = new RequestSummaryDto.ReasonBreakdown();
         RequestSummaryDto.ReasonBreakdown processed = new RequestSummaryDto.ReasonBreakdown();
@@ -110,11 +117,12 @@ public class DashboardRepository {
 
         namedParameterJdbcTemplate.query(sql.toString(), params, rs -> {
             int flag = rs.getInt("MGRFLAG");
-            String rsn = rs.getString("REASON");
+            String rsn = rs.getString("REQUESTREASONCODE");
             long cnt = rs.getLong("cnt");
 
-            boolean isReplacement = rsn != null && rsn.equalsIgnoreCase("Card Replacement");
-            boolean isProductChange = rsn != null && rsn.equalsIgnoreCase("Product Change");
+            // REQUESTREASONCODE: codes starting with CR* = Card Replacement, PC* = Product Change
+            boolean isReplacement = rsn != null && rsn.toUpperCase().startsWith("CR");
+            boolean isProductChange = rsn != null && rsn.toUpperCase().startsWith("PC");
 
             if (flag == 2) {
                 if (isReplacement) pending.setReplacement(pending.getReplacement() + cnt);
@@ -147,7 +155,7 @@ public class DashboardRepository {
      */
     public List<FailedRequestDto> getFailedRequests(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
         StringBuilder sql = new StringBuilder(
-            "SELECT rr.REQUESTID, rr.REQUESTEDCARD, rr.REASON, rr.REJECTREMARK, rr.LASTUPDATEDTIME " +
+            "SELECT rr.REQUESTID, rr.REQUESTEDCARD, rr.REQUESTREASONCODE, rr.REJECTREMARK, rr.LASTUPDATEDTIME " +
             "FROM CARD c " +
             "JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
             "WHERE c.MGRFLAG = 4 "
@@ -167,7 +175,7 @@ public class DashboardRepository {
             params.addValue("productType", productType);
         }
         if (reason != null && !reason.trim().isEmpty()) {
-            sql.append("AND rr.REASON = :reason ");
+            sql.append("AND rr.REQUESTREASONCODE = :reason ");
             params.addValue("reason", reason);
         }
         if (mgrFlag != null && mgrFlag != 4) {
@@ -183,7 +191,7 @@ public class DashboardRepository {
             return FailedRequestDto.builder()
                     .requestId(rs.getString("REQUESTID"))
                     .cardNumber(rs.getString("REQUESTEDCARD"))
-                    .reason(rs.getString("REASON"))
+                    .reason(rs.getString("REQUESTREASONCODE"))
                     .rejectRemark(rs.getString("REJECTREMARK"))
                     .lastUpdatedTime(lastUpdated)
                     .build();
