@@ -1,5 +1,3 @@
-'use client';
-
 import { Activity, Clock, Play, Cpu, Timer, Layers } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -21,43 +19,18 @@ const performanceData = [
 
 export default function EnginePerformance() {
   const metrics: PerformanceMetric[] = [
-    {
-      label: 'Engine Status',
-      value: 'Running',
-      icon: <Activity size={22} />,
-    },
-    {
-      label: 'Last Execution Timestamp',
-      value: '2024-06-18 13:45:32',
-      icon: <Clock size={22} />,
-    },
-    {
-      label: 'Next Scheduled Run',
-      value: '2024-06-18 14:00:00',
-      icon: <Play size={22} />,
-    },
-    {
-      label: 'Cards Processed per Run',
-      value: '2,847',
-      icon: <Layers size={22} />,
-    },
-    {
-      label: 'Average Processing Time',
-      value: '1.38 sec/card',
-      icon: <Timer size={22} />,
-    },
-    {
-      label: 'Parallel Threads',
-      value: '8 threads',
-      icon: <Cpu size={22} />,
-    },
+    { label: 'Engine Status', value: 'Running', icon: <Activity size={22} /> },
+    { label: 'Last Execution Timestamp', value: '2024-06-18 13:45:32', icon: <Clock size={22} /> },
+    { label: 'Next Scheduled Run', value: '2024-06-18 14:00:00', icon: <Play size={22} /> },
+    { label: 'Cards Processed per Run', value: '2,847', icon: <Layers size={22} /> },
+    { label: 'Average Processing Time', value: '1.38 sec/card', icon: <Timer size={22} /> },
+    { label: 'Parallel Threads', value: '8 threads', icon: <Cpu size={22} /> },
   ];
 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-foreground">Migration Service Engine Performance</h2>
 
-      {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {metrics.map((metric) => (
           <div key={metric.label} className="kpi-card">
@@ -75,7 +48,6 @@ export default function EnginePerformance() {
         ))}
       </div>
 
-      {/* Performance Chart */}
       <div className="dashboard-card p-6">
         <h3 className="text-lg font-semibold text-foreground mb-6">Performance Metrics Timeline</h3>
         <div className="h-80">
@@ -114,7 +86,6 @@ export default function EnginePerformance() {
         </div>
       </div>
 
-      {/* Time Period Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="dashboard-card p-6">
           <p className="text-sm text-muted-foreground font-medium mb-3">Monitoring Period</p>
