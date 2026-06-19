@@ -82,20 +82,27 @@ public class DashboardRepository {
      * Fetch request counts split by reason (Card Replacement vs Product Change) for each migration status bucket.
      */
     public RequestSummaryDto getRequestSummary(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
+        // Counts are driven by CARD.MGRFLAG:
+        //   Pending   = MGRFLAG 2
+        //   Processed = MGRFLAG 3 or 4
+        //   Completed = MGRFLAG 3
+        //   Failed    = MGRFLAG 4
+        // We LEFT JOIN RECARDREQUEST to optionally split by reason code (CR* vs PC*).
+        // Cards with no matching RECARDREQUEST row are still counted (NULL reason = catch-all).
         StringBuilder sql = new StringBuilder(
             "SELECT c.MGRFLAG, rr.REQUESTREASONCODE, COUNT(*) AS cnt " +
             "FROM CARD c " +
-            "JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
-            "WHERE 1=1 "
+            "LEFT JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
+            "WHERE c.MGRFLAG IN (2, 3, 4) "
         );
         MapSqlParameterSource params = new MapSqlParameterSource();
 
         if (fromDate != null) {
-            sql.append("AND rr.LASTUPDATEDTIME >= :fromDate ");
+            sql.append("AND c.LASTUPDATEDTIME >= :fromDate ");
             params.addValue("fromDate", Timestamp.valueOf(fromDate));
         }
         if (toDate != null) {
-            sql.append("AND rr.LASTUPDATEDTIME <= :toDate ");
+            sql.append("AND c.LASTUPDATEDTIME <= :toDate ");
             params.addValue("toDate", Timestamp.valueOf(toDate));
         }
         if (productType != null && !productType.trim().isEmpty()) {
@@ -123,24 +130,25 @@ public class DashboardRepository {
             String rsn = rs.getString("REQUESTREASONCODE");
             long cnt = rs.getLong("cnt");
 
-            // REQUESTREASONCODE: codes starting with CR* = Card Replacement, PC* = Product Change
-            boolean isReplacement = rsn != null && rsn.toUpperCase().startsWith("CR");
+            // Split by reason code where available; NULL reason (no RECARDREQUEST match)
+            // is treated as Card Replacement (catch-all) so counts are never lost.
             boolean isProductChange = rsn != null && rsn.toUpperCase().startsWith("PC");
+            boolean isReplacement   = !isProductChange; // CR*, NULL, or any other code
 
             if (flag == 2) {
-                if (isReplacement) pending.setReplacement(pending.getReplacement() + cnt);
+                if (isReplacement)   pending.setReplacement(pending.getReplacement() + cnt);
                 if (isProductChange) pending.setProductChange(pending.getProductChange() + cnt);
             }
             if (flag == 3 || flag == 4) {
-                if (isReplacement) processed.setReplacement(processed.getReplacement() + cnt);
+                if (isReplacement)   processed.setReplacement(processed.getReplacement() + cnt);
                 if (isProductChange) processed.setProductChange(processed.getProductChange() + cnt);
             }
             if (flag == 3) {
-                if (isReplacement) completed.setReplacement(completed.getReplacement() + cnt);
+                if (isReplacement)   completed.setReplacement(completed.getReplacement() + cnt);
                 if (isProductChange) completed.setProductChange(completed.getProductChange() + cnt);
             }
             if (flag == 4) {
-                if (isReplacement) failed.setReplacement(failed.getReplacement() + cnt);
+                if (isReplacement)   failed.setReplacement(failed.getReplacement() + cnt);
                 if (isProductChange) failed.setProductChange(failed.getProductChange() + cnt);
             }
         });
@@ -157,8 +165,11 @@ public class DashboardRepository {
      * Fetch list of failed requests (MGRFLAG = 4) for the detail drill-down.
      */
     public List<FailedRequestDto> getFailedRequests(LocalDateTime fromDate, LocalDateTime toDate, String productType, String reason, Integer mgrFlag) {
+        // Always use c.CARDNUMBER as the card identifier so records appear even when
+        // no matching RECARDREQUEST row exists (LEFT JOIN may yield NULL rr columns).
         StringBuilder sql = new StringBuilder(
-            "SELECT rr.REQUESTID, rr.REQUESTEDCARD, rr.REQUESTREASONCODE, rr.REJECTREMARK, rr.LASTUPDATEDTIME " +
+            "SELECT c.CARDNUMBER, rr.REQUESTID, rr.REQUESTREASONCODE, rr.REJECTREMARK, " +
+            "COALESCE(rr.LASTUPDATEDTIME, c.LASTUPDATEDTIME) AS LASTUPDATEDTIME " +
             "FROM CARD c " +
             "LEFT JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
             "WHERE c.MGRFLAG = 4 "
@@ -166,11 +177,11 @@ public class DashboardRepository {
         MapSqlParameterSource params = new MapSqlParameterSource();
 
         if (fromDate != null) {
-            sql.append("AND rr.LASTUPDATEDTIME >= :fromDate ");
+            sql.append("AND c.LASTUPDATEDTIME >= :fromDate ");
             params.addValue("fromDate", Timestamp.valueOf(fromDate));
         }
         if (toDate != null) {
-            sql.append("AND rr.LASTUPDATEDTIME <= :toDate ");
+            sql.append("AND c.LASTUPDATEDTIME <= :toDate ");
             params.addValue("toDate", Timestamp.valueOf(toDate));
         }
         if (productType != null && !productType.trim().isEmpty()) {
@@ -186,16 +197,16 @@ public class DashboardRepository {
             return new ArrayList<>();
         }
 
-        sql.append("ORDER BY rr.LASTUPDATEDTIME DESC");
+        sql.append("ORDER BY LASTUPDATEDTIME DESC");
 
         return namedParameterJdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> {
             Timestamp ts = rs.getTimestamp("LASTUPDATEDTIME");
             LocalDateTime lastUpdated = ts != null ? ts.toLocalDateTime() : null;
             return FailedRequestDto.builder()
-                    .requestId(rs.getString("REQUESTID"))
-                    .cardNumber(rs.getString("REQUESTEDCARD"))
-                    .reason(rs.getString("REQUESTREASONCODE"))
-                    .rejectRemark(rs.getString("REJECTREMARK"))
+                    .requestId(rs.getString("REQUESTID"))           // may be null if no RECARDREQUEST
+                    .cardNumber(rs.getString("CARDNUMBER"))          // always from CARD table
+                    .reason(rs.getString("REQUESTREASONCODE"))       // may be null
+                    .rejectRemark(rs.getString("REJECTREMARK"))      // may be null
                     .lastUpdatedTime(lastUpdated)
                     .build();
         });
