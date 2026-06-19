@@ -3,12 +3,8 @@ package com.dfcc.dashboard.controller;
 import com.dfcc.dashboard.dto.*;
 import com.dfcc.dashboard.repository.DashboardRepository;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -65,10 +61,8 @@ public class DashboardController {
 
     /**
      * GET /api/dashboard/engine-status
-     * Access restricted to ADMIN only.
      */
     @GetMapping("/engine-status")
-    @PreAuthorize("hasRole('ADMIN')")
     public List<EngineStatusDto> getEngineStatus() {
         return dashboardRepository.getEngineStatus();
     }
@@ -79,24 +73,5 @@ public class DashboardController {
     @GetMapping("/product-types")
     public List<String> getProductTypes() {
         return dashboardRepository.getProductTypes();
-    }
-
-    /**
-     * GET /api/dashboard/me
-     * Returns current user status.
-     */
-    @GetMapping("/me")
-    public Map<String, Object> getMe(Authentication authentication) {
-        Map<String, Object> response = new HashMap<>();
-        if (authentication != null && authentication.isAuthenticated()) {
-            response.put("username", authentication.getName());
-            String role = authentication.getAuthorities().isEmpty() ? "" : 
-                    authentication.getAuthorities().iterator().next().getAuthority();
-            response.put("role", role);
-            response.put("authenticated", true);
-        } else {
-            response.put("authenticated", false);
-        }
-        return response;
     }
 }
