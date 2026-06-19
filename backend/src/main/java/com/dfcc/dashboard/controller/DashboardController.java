@@ -23,11 +23,6 @@ public class DashboardController {
     /**
      * GET /api/dashboard/migration-flags
      */
-    @GetMapping("/test-columns")
-    public List<String> testColumns() {
-        return dashboardRepository.getTableColumns();
-    }
-
     @GetMapping("/migration-flags")
     public MigrationFlagsDto getMigrationFlags(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,

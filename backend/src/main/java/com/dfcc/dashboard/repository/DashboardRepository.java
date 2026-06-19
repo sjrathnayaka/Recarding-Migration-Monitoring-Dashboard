@@ -18,10 +18,13 @@ public class DashboardRepository {
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
     }
 
-    public List<String> getTableColumns() {
-        return namedParameterJdbcTemplate.getJdbcOperations().queryForList(
-            "SELECT column_name FROM user_tab_columns WHERE table_name = 'RECARDREQUEST' ORDER BY column_id", 
-            String.class
+    /**
+     * Get the latest update timestamp from the CARD table.
+     */
+    public Long getLatestUpdateHash() {
+        return namedParameterJdbcTemplate.getJdbcOperations().queryForObject(
+            "SELECT COUNT(*) + NVL(MAX(CAST(EXTRACT(SECOND FROM (CAST(LASTUPDATEDTIME AS TIMESTAMP))) AS NUMBER)), 0) FROM CARD", 
+            Long.class
         );
     }
 
@@ -157,7 +160,7 @@ public class DashboardRepository {
         StringBuilder sql = new StringBuilder(
             "SELECT rr.REQUESTID, rr.REQUESTEDCARD, rr.REQUESTREASONCODE, rr.REJECTREMARK, rr.LASTUPDATEDTIME " +
             "FROM CARD c " +
-            "JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
+            "LEFT JOIN RECARDREQUEST rr ON rr.REQUESTEDCARD = c.CARDNUMBER " +
             "WHERE c.MGRFLAG = 4 "
         );
         MapSqlParameterSource params = new MapSqlParameterSource();
