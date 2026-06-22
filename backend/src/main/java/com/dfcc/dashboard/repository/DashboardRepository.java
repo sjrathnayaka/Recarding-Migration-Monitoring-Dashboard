@@ -19,11 +19,26 @@ public class DashboardRepository {
     }
 
     /**
-     * Get the latest update timestamp from the CARD table.
+     * Computes a lightweight hash over the CARD and MD_ENGINE_CONFIGURATIONS tables
+     * to detect any change:
+     *  CARD table:
+     *   - COUNT(*)              catches INSERT / DELETE
+     *   - SUM(MGRFLAG)          catches MGRFLAG updates on existing rows
+     *   - MAX(timestamp)        catches LASTUPDATEDTIME updates
+     *  MD_ENGINE_CONFIGURATIONS table:
+     *   - SUM(ENGINESTATUS)     catches engine started / stopped
+     *   - MAX(LASTEXECUTIONTIME seconds) catches new execution runs
      */
     public Long getLatestUpdateHash() {
         return namedParameterJdbcTemplate.getJdbcOperations().queryForObject(
-            "SELECT COUNT(*) + NVL(MAX(CAST(EXTRACT(SECOND FROM (CAST(LASTUPDATEDTIME AS TIMESTAMP))) AS NUMBER)), 0) FROM CARD", 
+            "SELECT " +
+            "  (SELECT COUNT(*) + NVL(SUM(MGRFLAG), 0) " +
+            "          + NVL(MAX(CAST(EXTRACT(SECOND FROM (CAST(LASTUPDATEDTIME AS TIMESTAMP))) AS NUMBER)), 0) " +
+            "   FROM CARD) " +
+            "+ (SELECT NVL(SUM(ENGINESTATUS), 0) " +
+            "          + NVL(MAX(CAST(EXTRACT(SECOND FROM (CAST(LASTEXECUTIONTIME AS TIMESTAMP))) AS NUMBER)), 0) " +
+            "   FROM MD_ENGINE_CONFIGURATIONS) " +
+            "FROM DUAL",
             Long.class
         );
     }
