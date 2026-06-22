@@ -2,13 +2,29 @@ import { useState, useEffect, useCallback } from 'react'
 import ReactECharts from 'echarts-for-react'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 import './App.css'
 
 /* ─────────────────────────────────────────
    Config
 ───────────────────────────────────────── */
-const API      = '/api/dashboard'
-const POLL_MS  = 30_000          // auto-refresh every 30 seconds
+const API          = '/api/dashboard'
+const WS_ENDPOINT  = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws-dashboard'
+const UPDATE_TOPIC = '/topic/dashboard-updates'
+
+/* DFCC brand colors — red is primary on https://www.dfcc.lk/ */
+const BRAND = {
+  red:      '#ed1d24',
+  redDark:  '#c9181e',
+  black:    '#000000',
+  charcoal: '#2d3e50',
+  success:  '#198754',
+  amber:    '#d97706',
+  muted:    '#676767',
+  border:   '#e0e0e0',
+  surface:  '#f6f6f6',
+}
 
 /* ─────────────────────────────────────────
    Tiny inline-SVG icon helper (Feather-style)
@@ -22,7 +38,6 @@ const PATHS = {
   layers   : 'M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
   cpu      : 'M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 0-2-2V9m0 0h18',
   play     : 'M5 3l14 9-14 9V3z',
-  settings : 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z',
   refresh  : 'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
   alert    : 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4m0 4h.01',
   grid     : 'M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z',
@@ -41,7 +56,6 @@ const Ico = ({ name, size = 18 }) => (
 ───────────────────────────────────────── */
 const fmt      = n  => (n != null ? Number(n).toLocaleString() : '—')
 const fmtDT    = dt => dt ? dayjs(dt).format('YYYY-MM-DD HH:mm:ss') : '—'
-const clamp    = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 /** Seed 15 historical points so chart shows immediately on first load */
 function seedHistory(cardsBase, pendingBase) {
@@ -59,26 +73,27 @@ export default function App() {
   const [flags,       setFlags]       = useState(null)
   const [summary,     setSummary]     = useState(null)
   const [engines,     setEngines]     = useState([])
-  const [failed,      setFailed]      = useState([])
+  // const [failed,      setFailed]      = useState([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [history,     setHistory]     = useState([])
+  const [wsConnected, setWsConnected] = useState(false)
 
   /* ── Fetch all data ── */
   const fetchAll = useCallback(async () => {
     try {
-      const [f, s, e, fr] = await Promise.all([
+      const [f, s, e] = await Promise.all([
         axios.get(`${API}/migration-flags`),
         axios.get(`${API}/request-summary`),
         axios.get(`${API}/engine-status`),
-        axios.get(`${API}/failed-requests`),
+        // axios.get(`${API}/failed-requests`),
       ])
 
       setFlags(f.data)
       setSummary(s.data)
       setEngines(e.data || [])
-      setFailed(fr.data || [])
+      // setFailed(fr.data || [])
       setLastRefresh(new Date())
       setError(null)
 
@@ -98,11 +113,31 @@ export default function App() {
     }
   }, [])
 
-  /* ── Polling: fetch on mount + every 30 s ── */
+  /* ── Initial load on mount ── */
   useEffect(() => {
     fetchAll()
-    const id = setInterval(fetchAll, POLL_MS)
-    return () => clearInterval(id)
+  }, [fetchAll])
+
+  /* ── STOMP over SockJS: refresh when backend broadcasts DATA_CHANGED ── */
+  useEffect(() => {
+    const client = new Client({
+      webSocketFactory: () => new SockJS(WS_ENDPOINT),
+      reconnectDelay: 5000,
+      onConnect: () => {
+        setWsConnected(true)
+        client.subscribe(UPDATE_TOPIC, () => {
+          fetchAll()
+        })
+      },
+      onDisconnect: () => setWsConnected(false),
+    })
+
+    client.activate()
+
+    return () => {
+      setWsConnected(false)
+      client.deactivate()
+    }
   }, [fetchAll])
 
   /* ── Derived values ── */
@@ -112,59 +147,49 @@ export default function App() {
   const totalComp     = (summary?.completed?.replacement ?? 0) + (summary?.completed?.productChange ?? 0)
   const totalFailed   = (summary?.failed?.replacement    ?? 0) + (summary?.failed?.productChange    ?? 0)
 
-  const threadPct = engine.threads
-    ? clamp(Math.round((engine.threads / 20) * 100), 0, 100)
-    : 0
-  const batchPct  = engine.batchSize && engine.cardsProcessedPerRun
-    ? clamp(Math.round((engine.cardsProcessedPerRun / engine.batchSize) * 100), 0, 100)
-    : 0
-  const queuePct  = (totalPending + totalComp) > 0
-    ? clamp(Math.round((totalPending / (totalPending + totalComp)) * 100), 0, 100)
-    : 0
-
   /* ── ECharts option ── */
   const chartOpt = {
     backgroundColor: 'transparent',
     grid: { top: 16, right: 20, bottom: 36, left: 52, containLabel: false },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#1a3a5c',
-      borderColor: '#1a3a5c',
+      backgroundColor: BRAND.red,
+      borderColor: BRAND.red,
       textStyle: { color: '#fff', fontSize: 12 },
       formatter: params => {
         const t = params[0]?.axisValue ?? ''
         return params.map(p =>
           `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:5px"></span>${p.seriesName}: <b>${Number(p.value).toLocaleString()}</b>`
-        ).join('<br/>') + `<br/><small style="color:#94a3b8">${t}</small>`
+        ).join('<br/>') + `<br/><small style="color:#f7b8bb">${t}</small>`
       },
     },
     xAxis: {
       type: 'category',
       data: history.map(h => h.time),
-      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLine: { lineStyle: { color: BRAND.border } },
       axisTick: { show: false },
-      axisLabel: { color: '#94a3b8', fontSize: 11 },
+      axisLabel: { color: BRAND.muted, fontSize: 11 },
       boundaryGap: false,
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
-      axisLabel: { color: '#94a3b8', fontSize: 11 },
+      splitLine: { lineStyle: { color: BRAND.surface, type: 'dashed' } },
+      axisLabel: { color: BRAND.muted, fontSize: 11 },
     },
     series: [
       {
         name: 'Cards Processed',
         type: 'line', smooth: true, symbol: 'none',
         data: history.map(h => h.cards),
-        lineStyle: { color: '#0ea5e9', width: 2.5 },
+        lineStyle: { color: BRAND.red, width: 2.5 },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(14,165,233,.18)' },
-              { offset: 1, color: 'rgba(14,165,233,0)' },
+              { offset: 0, color: 'rgba(237,29,36,.18)' },
+              { offset: 1, color: 'rgba(237,29,36,0)' },
             ],
           },
         },
@@ -173,13 +198,13 @@ export default function App() {
         name: 'Pending',
         type: 'line', smooth: true, symbol: 'none',
         data: history.map(h => h.pending),
-        lineStyle: { color: '#f59e0b', width: 2.5 },
+        lineStyle: { color: BRAND.charcoal, width: 2.5 },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(245,158,11,.14)' },
-              { offset: 1, color: 'rgba(245,158,11,0)' },
+              { offset: 0, color: 'rgba(45,62,80,.12)' },
+              { offset: 1, color: 'rgba(45,62,80,0)' },
             ],
           },
         },
@@ -189,25 +214,55 @@ export default function App() {
 
   /* ── Card definitions ── */
   const flagCards = [
-    { label: 'Flag 0', sub: 'Normal',          value: flags?.flag0, icon: 'grid',     color: 'c-blue'  },
-    { label: 'Flag 1', sub: 'Initiated',        value: flags?.flag1, icon: 'activity', color: 'c-blue'  },
-    { label: 'Flag 2', sub: 'Pending',          value: flags?.flag2, icon: 'zap',      color: 'c-amber' },
-    { label: 'Flag 3', sub: 'Completed',        value: flags?.flag3, icon: 'check',    color: 'c-green' },
-    { label: 'Flag 4', sub: 'Failed/Rejected',  value: flags?.flag4, icon: 'x',        color: 'c-red'   },
+    { label: 'Normal (Flag 0)',                        value: flags?.flag0, icon: 'grid',     color: 'c-black' },
+    { label: 'Initiated (Flag 1)',                     value: flags?.flag1, icon: 'activity', color: 'c-black' },
+    { label: 'Activated + Balance Migration (Flag 2)', value: flags?.flag2, icon: 'zap',      color: 'c-amber' },
+    { label: 'History Migration (Flag 3)',             value: flags?.flag3, icon: 'check',    color: 'c-green' },
+    { label: 'Failed/Rejected (Flag 4)',               value: flags?.flag4, icon: 'x',        color: 'c-red'   },
   ]
 
   const reqCards = [
-    { label: 'Pending Requests',   sub: 'Awaiting processing',    value: totalPending, icon: 'clock',    color: 'c-blue'  },
-    { label: 'Processed Requests', sub: 'In progress or queued',  value: totalProc,    icon: 'zap',      color: 'c-blue'  },
+    { label: 'Pending Requests',   sub: 'Awaiting processing',    value: totalPending, icon: 'clock',    color: 'c-black' },
+    { label: 'Processed Requests', sub: 'In progress or queued',  value: totalProc,    icon: 'zap',      color: 'c-red'   },
     { label: 'Completed Requests', sub: 'Successfully completed', value: totalComp,    icon: 'check',    color: 'c-green' },
     { label: 'Failed / Rejected',  sub: 'Failed or rejected',     value: totalFailed,  icon: 'x',        color: 'c-red'   },
   ]
 
+  const header = (
+    <>
+      <div className="dash-nav">
+        <div className="dashboard-wrapper">
+          <header className="dash-header">
+            <div className="dash-header-left">
+              <img
+                src="/dfcc-logo.png"
+                alt="DFCC Bank — Keep Growing"
+                className="dash-brand-logo"
+              />
+              <div className="dash-subtitle">Migration Service · Monitoring Dashboard</div>
+            </div>
+            <div className="dash-header-right">
+              <div className="refresh-chip">
+                <div className={`refresh-dot ${wsConnected ? 'refresh-dot-live' : ''}`} />
+                {lastRefresh ? `Updated ${dayjs(lastRefresh).format('HH:mm:ss')}` : 'Loading…'}
+                {wsConnected && <span className="refresh-live-label">Live</span>}
+              </div>
+              <button className="icon-btn" title="Refresh now" onClick={fetchAll}>
+                <Ico name="refresh" size={16} />
+              </button>
+            </div>
+          </header>
+        </div>
+      </div>
+    </>
+  )
+
   /* ── Loading skeleton ── */
   if (loading) return (
-    <div className="dashboard-wrapper">
-      <div style={{ paddingTop: 40 }}>
-        <div className="skel" style={{ height: 56, borderRadius: 12, marginBottom: 32 }} />
+    <div className="app-shell">
+      {header}
+      <div className="dashboard-wrapper dashboard-body">
+        <div className="skel" style={{ height: 88, borderRadius: 12, marginBottom: 20 }} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
           {[...Array(4)].map((_, i) => <div key={i} className="skel" style={{ height: 88, borderRadius: 12 }} />)}
         </div>
@@ -220,32 +275,10 @@ export default function App() {
 
   /* ── Dashboard ── */
   return (
-    <div className="dashboard-wrapper">
+    <div className="app-shell">
+      {header}
 
-      {/* Header */}
-      <header className="dash-header">
-        <div className="dash-header-left">
-          <div className="dash-logo">
-            <Ico name="activity" size={22} />
-          </div>
-          <div>
-            <div className="dash-title">Migration Service</div>
-            <div className="dash-subtitle">Card Migration Engine · DFCC Bank</div>
-          </div>
-        </div>
-        <div className="dash-header-right">
-          <div className="refresh-chip">
-            <div className="refresh-dot" />
-            {lastRefresh ? `Updated ${dayjs(lastRefresh).format('HH:mm:ss')}` : 'Loading…'}
-          </div>
-          <button className="icon-btn" title="Refresh now" onClick={fetchAll}>
-            <Ico name="refresh" size={16} />
-          </button>
-          <button className="icon-btn" title="Settings">
-            <Ico name="settings" size={16} />
-          </button>
-        </div>
-      </header>
+      <div className="dashboard-wrapper dashboard-body">
 
       {/* Error banner */}
       {error && (
@@ -257,7 +290,7 @@ export default function App() {
 
       {/* ── Cards per Migration Flag ── */}
       <section className="section">
-        <div className="section-title">Cards per Migration Flag</div>
+        <div className="section-title">DFCC Bank Cards per <em>Migration Flag</em></div>
         <div className="flag-grid">
           {flagCards.map(c => <StatCard key={c.label} {...c} />)}
         </div>
@@ -265,15 +298,42 @@ export default function App() {
 
       {/* ── Request Statistics ── */}
       <section className="section">
-        <div className="section-title">Request Statistics</div>
+        <div className="section-title"><em>Request</em> Statistics</div>
         <div className="req-grid">
           {reqCards.map(c => <StatCard key={c.label} {...c} />)}
         </div>
       </section>
 
+      {/* ── Performance Timeline ── */}
+      <section className="section">
+        <div className="chart-card">
+          <div className="chart-header">
+            <div className="chart-title">Performance <em>Metrics Timeline</em></div>
+            <div className="chart-legend">
+              <div className="legend-item">
+                <div className="legend-line" style={{ background: BRAND.red }} />
+                Cards Processed
+              </div>
+              <div className="legend-item">
+                <div className="legend-line" style={{ background: BRAND.charcoal }} />
+                Pending
+              </div>
+            </div>
+          </div>
+          {history.length > 1
+            ? <ReactECharts option={chartOpt} style={{ height: 230 }} notMerge />
+            : (
+              <div style={{ height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+                Collecting data points…
+              </div>
+            )
+          }
+        </div>
+      </section>
+
       {/* ── Engine Performance ── */}
       <section className="section">
-        <div className="section-title">Migration Service Engine Performance</div>
+        <div className="section-title">Migration Service <em>Engine Performance</em></div>
         <div className="engine-grid">
           {/* Row 1 */}
           <EngineCard icon="activity" label="Engine Status">
@@ -315,54 +375,8 @@ export default function App() {
         </div>
       </section>
 
-      {/* ── Performance Timeline ── */}
-      <section className="section">
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">Performance Metrics Timeline</div>
-            <div className="chart-legend">
-              <div className="legend-item">
-                <div className="legend-line" style={{ background: '#0ea5e9' }} />
-                Cards Processed
-              </div>
-              <div className="legend-item">
-                <div className="legend-line" style={{ background: '#f59e0b' }} />
-                Pending
-              </div>
-            </div>
-          </div>
-          {history.length > 1
-            ? <ReactECharts option={chartOpt} style={{ height: 230 }} notMerge />
-            : (
-              <div style={{ height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-                Collecting data points…
-              </div>
-            )
-          }
-        </div>
-      </section>
-
-      {/* ── Bottom row: Monitoring Period + System Status ── */}
-      <div className="bottom-row">
-        <div className="info-card">
-          <div className="info-label">Monitoring Period</div>
-          <div className="info-title">Today (Last 24 hours)</div>
-          <div className="info-meta">
-            Start: {dayjs().startOf('day').format('YYYY-MM-DD HH:mm:ss')}<br />
-            End: &nbsp; {dayjs().endOf('day').format('YYYY-MM-DD HH:mm:ss')}
-          </div>
-        </div>
-
-        <div className="info-card">
-          <div className="info-label" style={{ marginBottom: 14 }}>System Status</div>
-          <ProgressRow label="Thread Utilization" pct={threadPct} color="var(--success)" />
-          <ProgressRow label="Batch Load"          pct={batchPct}  color="var(--success)" />
-          <ProgressRow label="Queue Depth"         pct={queuePct}  color="var(--warning)" />
-        </div>
-      </div>
-
-      {/* ── Failed Requests Table ── */}
-      {failed.length > 0 && (
+      {/* ── Failed Requests Table (disabled) ── */}
+      {/* {failed.length > 0 && (
         <section className="section" style={{ marginTop: 14 }}>
           <div className="table-card">
             <div className="table-head">
@@ -407,7 +421,8 @@ export default function App() {
             </div>
           </div>
         </section>
-      )}
+      )} */}
+      </div>
     </div>
   )
 }
@@ -428,7 +443,7 @@ function StatCard({ label, sub, value, icon, color }) {
             ? fmt(value)
             : <div className="skel" style={{ height: 32, width: 70, borderRadius: 6 }} />}
         </div>
-        <div className="stat-sub">{sub}</div>
+        {sub && <div className="stat-sub">{sub}</div>}
       </div>
     </div>
   )
@@ -443,17 +458,6 @@ function EngineCard({ icon, label, children }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="engine-label">{label}</div>
         {children}
-      </div>
-    </div>
-  )
-}
-
-function ProgressRow({ label, pct, color }) {
-  return (
-    <div className="sys-row">
-      <div className="sys-lbl">{label}</div>
-      <div className="prog-wrap">
-        <div className="prog-fill" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
   )
